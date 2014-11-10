@@ -476,19 +476,19 @@ class PlotFrame(wx.Frame):
 		
 	def on_Helpmenu_instructions(self,event):
 		dlg = wx.MessageDialog(self, 
+		
 								'Tip 1: You can either browse or type your meterials(matrix,mask,eigenvalues or eigenvectors).\n''\n'
-								"Tip 2: You can either press ENTER or 'Inpyut' button to let us check and load your materials.\n"'\n'
+								"Tip 2: You can either press ENTER or 'Input' button to let us check and load your materials.\n"'\n'
 								"TIP 3: If you want to use the material, which is valid of course, please check the checkbox besides it.\n"'\n'
-								"Tip 4: if your material are masked, make sure you have input and checked the checkbox of the mask before inputting the material.\n" "So that we can use it to check, decipher and load them \n" '\n'
+								"Tip 4: if your material are masked, make sure you have input and checked the checkbox of the mask before inputting the material.\n" '\n'
 								"Tip 5: You can either press ENTER or 'Plot' buttun to plot specific order of eigenvectors and values.\n"'\n'
-								"Tip 6: You can either press ENTER or select in the 'Dropdown Combobox' to choose your favoured colormap.\n"'\n'
-								"Tip 7: If thing goes wrong, you will be always notified\n" "While if things goes well,you may not, but don't worry.\n"'\n'
-								"Tip 8: Eigenvalues and eigenvectors will be saved into the same file as your running python program with filename related to your the filename of your matrix.\n"'\n'
-								"Tip 9: Both masked and unmasked eigenvectors will be saved respectively.\n"'\n'
-								 "Tip 10: If you input unmasked eigenvectors which is deciphered from a masked one.\n""Make sure you have still provided your mask!\n"'\n'
-								 "Tip 11: You can control both tabs in the 'Superior Control Tab' absolutely seperately.\n""Upper two for 'Matrix Control', while lower two for 'Eigens Control'\n"'\n'
-								 "Tip 12: Set up the color range in the min and max box respectively and then ENTER.\n" "Notice that it will initiate to fit data if you press Plot again!\n"'\n'
-								 "Tip 13: Matrix Control and Eigens Control are synchronized with their counterpart in 'Superior Control'.\n" "Which is really convient for operating in defferent tabs."
+								"Tip 6: Eigenvalues and eigenvectors will be saved into the same file as your running python program with filename related to your the filename of your matrix."
+								"And both masked and unmasked eigenvectors will be saved respectively.\n"'\n'
+								"Tip 8: If you input unmasked eigenvectors which is deciphered from a masked one. Make sure you have still provided your mask!\n"'\n'
+								"Tip 9: You can control both tabs in the 'Superior Control Tab' absolutely seperately. Upper two for 'Matrix Control', while lower two for 'Eigens Control'\n"'\n'
+								"Tip 10: Set up the color range in the min and max box respectively and then ENTER. Notice that it will initiate to fit data if you press Plot again!\n"'\n'
+								"Tip 11: Matrix Control and Eigens Control are synchronized with their counterpart in 'Superior Control'. Which is really convient for operating in defferent tabs.",
+								  
 								  'A Brief Instuctions', wx.OK)
 		dlg.ShowModal()
 		dlg.Destroy()
@@ -2127,3 +2127,4 @@ class Eigen_App(wx.App):
 		
 app=Eigen_App(0)
 app.MainLoop()	
+

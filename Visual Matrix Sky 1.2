@@ -1,0 +1,2129 @@
+#import wxversion
+#wxversion.ensureMinimal('2.8')
+import numpy as np
+import scipy as sp
+import wx
+import sys
+import os
+import matplotlib as mpl
+import healpy as hp
+from wxmplot import plotpanel as pnl
+from matplotlib import pyplot as ppl
+from numpy import linalg as nla
+from scipy import linalg as la
+from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FC
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_wx import NavigationToolbar2Wx
+
+class PlotFrame(wx.Frame):
+	
+	def __init__(
+				 self,
+				 dtype_Matrix = np.dtype(np.float32),
+				 dtype_Mask_M = np.dtype(np.float32),
+				 dtype_Eigenvalues = np.dtype(np.float32),
+				 dtype_Eigenvectors = np.dtype(np.float32),
+				 dtype_Mask_E = np.dtype(np.float32),
+				 dtype_Save_eigenvalues =  np.dtype(np.float32),
+				 dtype_Save_eigenvectors =  np.dtype(np.float32)
+				 ):
+						  
+		wx.Frame.__init__(self,None, wx.ID_ANY, 'Visual Matrix Sky')
+		
+		self.dtype_Matrix = dtype_Matrix
+		self.dtype_Mask_M = dtype_Mask_M
+		self.dtype_Eigenvalues = dtype_Eigenvalues
+		self.dtype_Eigenvectors = dtype_Eigenvectors
+		self.dtype_Mask_E = dtype_Mask_E
+		self.dtype_Save_eigenvalues = dtype_Save_eigenvalues
+		self.dtype_Save_eigenvectors = dtype_Save_eigenvectors
+		
+		self.Construct_panel_Main()
+
+
+
+
+		
+	def Construct_panel_Main(self):
+		
+		self.panel = wx.Panel(self)
+		self.notebook = wx.Notebook(self.panel)
+		self.tab_M = wx.Panel(self.notebook)
+		self.tab_E = wx.Panel(self.notebook)
+		self.tab_S = wx.Panel(self.notebook)
+		self.menubar = wx.MenuBar()
+		
+		self.Construct_menubar()
+		self.SetMenuBar(self.menubar)	
+		
+		self.choice_M=0; self.choice_M_S=0
+		self.check_status_M=0; self.check_status_M_S=0
+		self.Matrix_status=0; self.Eigenvalues_status=0; self.Eigenvectors_status=0; self.Mask_M_status=0; self.Mask_M_status_Raw=0
+		self.eigenvalues=[0]; self.eigenvectors=[0]
+		self.choice_E=0; self.choice_E_S=0
+		self.check_status_E=0; self.check_status_E_S=0;
+		self.Mask_E_status=0; self.Mask_E_status_Raw=0
+		self.scale_vectors_x_M='linear'; self.scale_vectors_y_M='linear'; self.scale_values_x_M='linear'; self.scale_values_y_M='linear'
+		self.scale_vectors_x_E='linear'; self.scale_vectors_y_E='linear'; self.scale_values_x_E='linear'; self.scale_values_y_E='linear'
+		
+		self.Eigen_values = Figure(figsize=(5.0,6.0),facecolor=(1,1,0),tight_layout=True)
+		self.axevalues=self.Eigen_values.add_subplot(111)
+		self.Eigen_vectors = Figure(figsize=(8.5,6.0),facecolor=(0,1,1),tight_layout=True)
+		self.axevectors=self.Eigen_vectors.add_subplot(111)
+		self.canvas_values = FC(self.panel,-1,self.Eigen_values)
+		self.canvas_vectors = FC(self.panel,-1,self.Eigen_vectors)
+		
+		self.Construct_tab_M()
+					
+		self.Construct_tab_E()
+		
+		self.Construct_tab_S()
+		
+		self.Construct_notebook()
+		
+		self.panel.SetBackgroundColour('Magenta')
+		
+		self.SizerV=wx.BoxSizer(wx.VERTICAL)
+		self.SizerV1=wx.BoxSizer(wx.VERTICAL)
+		self.SizerV2=wx.BoxSizer(wx.VERTICAL)
+		self.SizerH5=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH6=wx.BoxSizer(wx.HORIZONTAL)
+		
+		self.SizerV1.Add(self.canvas_values,1,flag=wx.EXPAND,border=0)
+		self.SizerV2.Add(self.canvas_vectors,1,flag=wx.EXPAND,border=0)
+		self.add_toolbar()
+
+		self.SizerH5.Add(self.SizerV1,10,flag=wx.EXPAND,border=1)
+		self.SizerH5.Add(self.SizerV2,17,flag=wx.EXPAND,border=1)
+		self.SizerH6.Add(self.notebook,1,flag=wx.EXPAND,border=3)
+		
+		self.SizerV.Add(self.SizerH5,1,flag=wx.EXPAND|wx.ALL,border=1)
+		self.SizerV.Add(self.SizerH6,0.2,flag=wx.EXPAND|wx.ALL,border=1)
+		
+		self.panel.SetSizer(self.SizerV)
+		self.SizerV.Fit(self)
+		self.Layout()
+		
+		
+
+
+
+
+	
+	def Construct_tab_M(self):
+	
+		self.SizerV_M=wx.BoxSizer(wx.VERTICAL)
+		self.SizerH0=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH1=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH7=wx.BoxSizer(wx.HORIZONTAL)
+		
+		self.Matrixfile_text=wx.StaticText(self.tab_M,label='Tell Me Your Matrix: ')
+		self.Matrix_box=wx.TextCtrl(self.tab_M,size=(600,-1),style=wx.TE_PROCESS_ENTER)
+		self.Matrix_box.Bind(wx.EVT_TEXT_ENTER, self.on_Matrix_box, self.Matrix_box)
+		self.BrowseMatrix_button=wx.Button(self.tab_M,-1,"Browse Your File")
+		self.BrowseMatrix_button.Bind(wx.EVT_BUTTON, self.on_BrowseMatrix_button, self.BrowseMatrix_button)
+		self.InputMatrix_button=wx.Button(self.tab_M,-1,"Input Matrix")
+		self.InputMatrix_button.Bind(wx.EVT_BUTTON, self.on_InputMatrix_button, self.InputMatrix_button)
+		self.Matrix_checkbox=wx.CheckBox(self.tab_M,-1,label='Use this Matrix')
+		self.Matrix_checkbox.Bind(wx.EVT_CHECKBOX, self.on_Matrix_checkbox, self.Matrix_checkbox)
+		 
+		self.Mask_Mfile_text=wx.StaticText(self.tab_M,label='Tell Me Your Mask: ')
+		self.Mask_M_box=wx.TextCtrl(self.tab_M, size=(600,-1),style=wx.TE_PROCESS_ENTER)
+		self.Mask_M_box.Bind(wx.EVT_TEXT_ENTER, self.on_Mask_M_box, self.Mask_M_box)
+		self.BrowseMask_M_button=wx.Button(self.tab_M,-1,"Browse Your File")
+		self.BrowseMask_M_button.Bind(wx.EVT_BUTTON, self.on_BrowseMask_M_button, self.BrowseMask_M_button)
+		self.InputMask_M_button=wx.Button(self.tab_M,-1,"Input Mask")
+		self.InputMask_M_button.Bind(wx.EVT_BUTTON, self.on_InputMask_M_button, self.InputMask_M_button)
+		self.Mask_M_checkbox=wx.CheckBox(self.tab_M,-1,label='Use this Mask')
+		self.Mask_M_checkbox.Bind(wx.EVT_CHECKBOX, self.on_Mask_M_checkbox, self.Mask_M_checkbox)
+		
+		self.HEALPix_checkbox_M=wx.CheckBox(self.tab_M,-1,label='HEALPix')
+		self.HEALPix_checkbox_M.Bind(wx.EVT_CHECKBOX, self.on_HEALPix_checkbox_M, self.HEALPix_checkbox_M)
+		self.direct_text_M=wx.StaticText(self.tab_M,label='Order of Eigenvalues: ')
+		self.eigenorder_box_M=wx.TextCtrl(self.tab_M, size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.eigenorder_box_M.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter_M, self.eigenorder_box_M)
+		self.plot_button_M=wx.Button(self.tab_M,-1,"Plot")
+		self.plot_button_M.Bind(wx.EVT_BUTTON, self.on_plot_button_M, self.plot_button_M)
+		self.SaveEigens_button=wx.Button(self.tab_M,-1,"Save Values_Vectors for This Matrix")
+		self.SaveEigens_button.Bind(wx.EVT_BUTTON, self.on_SaveEigens_button, self.SaveEigens_button)
+		
+		self.SaveEigens_button.SetBackgroundColour((0,255,0))
+		
+		self.colormaps_M = [ 'jet','coolwarm', 'seismic', 'rainbow', 'gist_rainbow', 'hsv', 'hot', 'nipy_spectral', 'autumn', 'green']
+		self.cmap_text_M = wx.StaticText(self.tab_M, label='ColorMap: ')
+		self.cmap_combobox_M = wx.ComboBox(self.tab_M, size=(150, -1), value='rainbow', choices=self.colormaps_M, style=wx.CB_DROPDOWN)
+		self.Bind(wx.EVT_COMBOBOX, self.on_cmap_combobox_M, self.cmap_combobox_M)
+		self.Bind(wx.EVT_TEXT_ENTER, self.on_cmap_combobox_text_M,self.cmap_combobox_M)
+			
+		 
+		self.SizerH0.Add(self.Matrixfile_text,0.3,flag=wx.EXPAND|wx.TOP, border=5)
+		self.SizerH0.Add(self.Matrix_box,0.3,flag=wx.EXPAND)
+		self.SizerH0.Add(self.BrowseMatrix_button,0.3,flag=wx.EXPAND)
+		self.SizerH0.Add(self.InputMatrix_button,0.3,flag=wx.EXPAND)
+		self.SizerH0.Add(self.Matrix_checkbox,0.3,flag=wx.EXPAND|wx.ALL,border=5)
+		 
+		self.SizerH1.Add(self.Mask_Mfile_text,0.3,flag=wx.EXPAND|wx.TOP, border=5)
+		self.SizerH1.Add(self.Mask_M_box,0.3,flag=wx.EXPAND)
+		self.SizerH1.Add(self.BrowseMask_M_button,0.3,flag=wx.EXPAND)
+		self.SizerH1.Add(self.InputMask_M_button,0.3,flag=wx.EXPAND)
+		self.SizerH1.Add(self.Mask_M_checkbox,0.3,flag=wx.EXPAND|wx.ALL,border=5)
+		
+		self.SizerH7.Add(self.direct_text_M,0.2,flag=wx.EXPAND|wx.TOP,border=7.5)
+		self.SizerH7.Add(self.eigenorder_box_M,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.RIGHT,border=2)
+		self.SizerH7.Add(self.plot_button_M,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, border=3)
+		self.SizerH7.Add(self.HEALPix_checkbox_M,0.2,flag=wx.EXPAND|wx.ALL, border=5)
+		self.SizerH7.Add((100,-1))
+		self.SizerH7.Add(self.cmap_text_M,0.2,flag=wx.EXPAND|wx.LEFT|wx.TOP, border=8)
+		self.SizerH7.Add(self.cmap_combobox_M,0.2,flag=wx.EXPAND|wx.BOTTOM, border=2.5)
+		self.SizerH7.Add((0, 0), 1, wx.EXPAND)
+		self.SizerH7.Add(self.SaveEigens_button,0.2,flag=wx.EXPAND|wx.RIGHT, border=25)
+		
+		self.SizerV_M.Add(self.SizerH0,0.2,flag=wx.EXPAND|wx.TOP,border=10)
+		self.SizerV_M.Add(self.SizerH1,0.2,flag=wx.EXPAND|wx.TOP,border=10)
+		self.SizerV_M.Add(self.SizerH7,0.2,flag=wx.EXPAND|wx.TOP,border=10)
+		
+		self.tab_M.SetSizer(self.SizerV_M)
+	
+	
+	
+	
+	
+	
+	def Construct_tab_E(self):
+	
+		self.SizerV_E=wx.BoxSizer(wx.VERTICAL)
+		self.SizerH2=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH3=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH4=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH8=wx.BoxSizer(wx.HORIZONTAL)
+		
+		self.Eigenvaluesfile_text=wx.StaticText(self.tab_E,label='Tell Me Your Eigenvalues: ')
+		self.Eigenvalues_box=wx.TextCtrl(self.tab_E, size=(600,-1),style=wx.TE_PROCESS_ENTER)
+		self.Eigenvalues_box.Bind(wx.EVT_TEXT_ENTER, self.on_Eigenvalues_box, self.Eigenvalues_box)
+		self.BrowseEigenvalues_button=wx.Button(self.tab_E,-1,"Browse Your File")
+		self.BrowseEigenvalues_button.Bind(wx.EVT_BUTTON, self.on_BrowseEigenvalues_button, self.BrowseEigenvalues_button)
+		self.InputEigenvalues_button=wx.Button(self.tab_E,-1,"Input Eigenvalues")
+		self.InputEigenvalues_button.Bind(wx.EVT_BUTTON, self.on_InputEigenvalues_button, self.InputEigenvalues_button)
+		self.Eigenvalues_checkbox=wx.CheckBox(self.tab_E,-1,label='Use this Eigenvalues')
+		self.Eigenvalues_checkbox.Bind(wx.EVT_CHECKBOX, self.on_Eigenvalues_checkbox, self.Eigenvalues_checkbox)
+		
+		self.Eigenvectorsfile_text=wx.StaticText(self.tab_E,label='Tell Me Your Eigenvectors: ')
+		self.Eigenvectors_box=wx.TextCtrl(self.tab_E, size=(600,-1),style=wx.TE_PROCESS_ENTER)
+		self.Eigenvectors_box.Bind(wx.EVT_TEXT_ENTER, self.on_Eigenvectors_box, self.Eigenvectors_box)
+		self.BrowseEigenvectors_button=wx.Button(self.tab_E,-1,"Browse Your File")
+		self.BrowseEigenvectors_button.Bind(wx.EVT_BUTTON, self.on_BrowseEigenvectors_button, self.BrowseEigenvectors_button)
+		self.InputEigenvectors_button=wx.Button(self.tab_E,-1,"Input Eigenvectors")
+		self.InputEigenvectors_button.Bind(wx.EVT_BUTTON, self.on_InputEigenvectors_button, self.InputEigenvectors_button)
+		self.Eigenvectors_checkbox=wx.CheckBox(self.tab_E,-1,label='Use this Eigenvectors')
+		self.Eigenvectors_checkbox.Bind(wx.EVT_CHECKBOX, self.on_Eigenvectors_checkbox, self.Eigenvectors_checkbox)
+		
+		self.Mask_Efile_text=wx.StaticText(self.tab_E,label='Tell Me Your Mask: ')
+		self.Mask_E_box=wx.TextCtrl(self.tab_E, size=(600,-1),style=wx.TE_PROCESS_ENTER)
+		self.Mask_E_box.Bind(wx.EVT_TEXT_ENTER, self.on_Mask_E_box, self.Mask_E_box)
+		self.BrowseMask_E_button=wx.Button(self.tab_E,-1,"Browse Your File")
+		self.BrowseMask_E_button.Bind(wx.EVT_BUTTON, self.on_BrowseMask_E_button, self.BrowseMask_E_button)
+		self.InputMask_E_button=wx.Button(self.tab_E,-1,"Input Mask")
+		self.InputMask_E_button.Bind(wx.EVT_BUTTON, self.on_InputMask_E_button, self.InputMask_E_button)
+		self.Mask_E_checkbox=wx.CheckBox(self.tab_E,-1,label='Use this Mask')
+		self.Mask_E_checkbox.Bind(wx.EVT_CHECKBOX, self.on_Mask_E_checkbox, self.Mask_E_checkbox)
+		
+		self.HEALPix_checkbox_E=wx.CheckBox(self.tab_E,-1,label='HEALPix')
+		self.HEALPix_checkbox_E.Bind(wx.EVT_CHECKBOX, self.on_HEALPix_checkbox_E, self.HEALPix_checkbox_E)
+		self.direct_text_E=wx.StaticText(self.tab_E,label='Order of Eigenvalues: ')
+		self.eigenorder_box_E=wx.TextCtrl(self.tab_E,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.eigenorder_box_E.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter_E, self.eigenorder_box_E)
+		self.plot_button_E=wx.Button(self.tab_E,-1,"Plot")
+		self.plot_button_E.Bind(wx.EVT_BUTTON, self.on_plot_button_E, self.plot_button_E)		
+		
+		self.colormaps_E = [ 'jet','coolwarm', 'seismic', 'rainbow', 'gist_rainbow', 'hsv', 'hot', 'nipy_spectral', 'autumn', 'green']
+		self.cmap_text_E = wx.StaticText(self.tab_E, label='ColorMap: ')
+		self.cmap_combobox_E = wx.ComboBox(self.tab_E, size=(150, -1), value='rainbow', choices=self.colormaps_E, style=wx.CB_DROPDOWN)
+		self.Bind(wx.EVT_COMBOBOX, self.on_cmap_combobox_E, self.cmap_combobox_E)
+		self.Bind(wx.EVT_TEXT_ENTER, self.on_cmap_combobox_text_E,self.cmap_combobox_E)
+		
+		self.SizerH2.Add(self.Eigenvaluesfile_text,0.3,flag=wx.EXPAND|wx.TOP, border=5)
+		self.SizerH2.Add(self.Eigenvalues_box,0.3,flag=wx.EXPAND)
+		self.SizerH2.Add(self.BrowseEigenvalues_button,0.3,flag=wx.EXPAND)
+		self.SizerH2.Add(self.InputEigenvalues_button,0.3,flag=wx.EXPAND)
+		self.SizerH2.Add(self.Eigenvalues_checkbox,0.3,flag=wx.EXPAND|wx.ALL, border=5)
+		
+		self.SizerH3.Add(self.Eigenvectorsfile_text,0.3,flag=wx.EXPAND|wx.TOP, border=5)
+		self.SizerH3.Add(self.Eigenvectors_box,0.3,flag=wx.EXPAND)
+		self.SizerH3.Add(self.BrowseEigenvectors_button,0.3,flag=wx.EXPAND)
+		self.SizerH3.Add(self.InputEigenvectors_button,0.3,flag=wx.EXPAND)
+		self.SizerH3.Add(self.Eigenvectors_checkbox,0.3,flag=wx.EXPAND|wx.ALL,border=5)
+		
+		self.SizerH4.Add(self.Mask_Efile_text,0.3,flag=wx.EXPAND|wx.TOP, border=5)
+		self.SizerH4.Add(self.Mask_E_box,0.3,flag=wx.EXPAND)
+		self.SizerH4.Add(self.BrowseMask_E_button,0.3,flag=wx.EXPAND)
+		self.SizerH4.Add(self.InputMask_E_button,0.3,flag=wx.EXPAND)
+		self.SizerH4.Add(self.Mask_E_checkbox,0.3,flag=wx.EXPAND|wx.ALL,border=5)
+		
+		self.SizerH8.Add(self.direct_text_E,0.2,flag=wx.EXPAND|wx.TOP,border=5.5)
+		self.SizerH8.Add(self.eigenorder_box_E,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.RIGHT,border=2.25)
+		self.SizerH8.Add(self.plot_button_E,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, border=4.5)
+		self.SizerH8.Add(self.HEALPix_checkbox_E,0.2,flag=wx.EXPAND|wx.ALL|wx.LEFT, border=5)
+		self.SizerH8.Add((100,-1))
+		self.SizerH8.Add(self.cmap_text_E,0.2,flag=wx.EXPAND|wx.TOP, border=8.5)
+		self.SizerH8.Add(self.cmap_combobox_E,0.2,flag=wx.EXPAND|wx.BOTTOM, border=3)
+		
+		self.SizerV_E.Add(self.SizerH2,0.2,flag=wx.EXPAND|wx.TOP,border=4)
+		self.SizerV_E.Add(self.SizerH3,0.2,flag=wx.EXPAND|wx.TOP,border=4)
+		self.SizerV_E.Add(self.SizerH4,0.2,flag=wx.EXPAND|wx.TOP,border=4)
+		self.SizerV_E.Add(self.SizerH8,0.2,flag=wx.EXPAND|wx.TOP,border=4)
+		
+		self.tab_E.SetSizer(self.SizerV_E)	
+
+
+
+
+
+	
+	def Construct_tab_S(self):
+		
+		self.HEALPix_checkbox_M_S=wx.CheckBox(self.tab_S,-1,label='HEALPix')
+		self.HEALPix_checkbox_M_S.Bind(wx.EVT_CHECKBOX, self.on_HEALPix_checkbox_M_S, self.HEALPix_checkbox_M_S)
+		self.direct_text_M_S=wx.StaticText(self.tab_S,label='Order of Eigenvalues(Matrix): ')
+		self.eigenorder_box_M_S=wx.TextCtrl(self.tab_S, size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.eigenorder_box_M_S.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter_M_S, self.eigenorder_box_M_S)
+		self.plot_button_M_S=wx.Button(self.tab_S,-1,"Plot")
+		self.plot_button_M_S.Bind(wx.EVT_BUTTON, self.on_plot_button_M_S, self.plot_button_M_S)
+		self.SaveEigens_button_S=wx.Button(self.tab_S,-1,"Save Values_Vectors for This Matrix")
+		self.SaveEigens_button_S.Bind(wx.EVT_BUTTON, self.on_SaveEigens_button, self.SaveEigens_button_S)
+		
+		self.SaveEigens_button_S.SetBackgroundColour((0,255,0))
+			
+		self.HEALPix_checkbox_E_S=wx.CheckBox(self.tab_S,-1,label='HEALPix')
+		self.HEALPix_checkbox_E_S.Bind(wx.EVT_CHECKBOX, self.on_HEALPix_checkbox_E_S, self.HEALPix_checkbox_E_S)
+		self.direct_text_E_S=wx.StaticText(self.tab_S,label='Order of Eigenvalues(Eigens): ')
+		self.eigenorder_box_E_S=wx.TextCtrl(self.tab_S,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.eigenorder_box_E_S.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter_E_S, self.eigenorder_box_E_S)
+		self.plot_button_E_S=wx.Button(self.tab_S,-1,"Plot")
+		self.plot_button_E_S.Bind(wx.EVT_BUTTON, self.on_plot_button_E_S, self.plot_button_E_S)
+		
+		self.colormaps_M_S = [ 'jet','coolwarm', 'seismic', 'rainbow', 'gist_rainbow', 'hsv', 'hot', 'nipy_spectral', 'autumn', 'green']
+		self.cmap_text_M_S = wx.StaticText(self.tab_S, label='ColorMap: ')
+		self.cmap_combobox_M_S = wx.ComboBox(self.tab_S, size=(150, -1), value='rainbow', choices=self.colormaps_M, style=wx.CB_DROPDOWN)
+		self.Bind(wx.EVT_COMBOBOX, self.on_cmap_combobox_M_S, self.cmap_combobox_M_S)
+		self.Bind(wx.EVT_TEXT_ENTER, self.on_cmap_combobox_text_M_S, self.cmap_combobox_M_S)
+		
+		self.colormaps_E_S = [ 'jet','coolwarm', 'seismic', 'rainbow', 'gist_rainbow', 'hsv', 'hot', 'nipy_spectral', 'autumn', 'green']
+		self.cmap_text_E_S = wx.StaticText(self.tab_S, label='ColorMap: ')
+		self.cmap_combobox_E_S = wx.ComboBox(self.tab_S, size=(150, -1), value='rainbow', choices=self.colormaps_E, style=wx.CB_DROPDOWN)
+		self.Bind(wx.EVT_COMBOBOX, self.on_cmap_combobox_E_S, self.cmap_combobox_E_S)
+		self.Bind(wx.EVT_TEXT_ENTER, self.on_cmap_combobox_text_E_S, self.cmap_combobox_E_S)
+		
+		self.crange_text_M_min=wx.StaticText(self.tab_S,label='Color Range Min: ')
+		self.crange_box_M_min=wx.TextCtrl(self.tab_S,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.crange_box_M_min.Bind(wx.EVT_TEXT_ENTER, self.on_crange_box_M, self.crange_box_M_min)
+		self.crange_text_M_max=wx.StaticText(self.tab_S,label='--  Color Range Max: ')
+		self.crange_box_M_max=wx.TextCtrl(self.tab_S,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.crange_box_M_max.Bind(wx.EVT_TEXT_ENTER, self.on_crange_box_M, self.crange_box_M_max)
+		self.crange_text_E_min=wx.StaticText(self.tab_S,label='Color Range Min: ')
+		self.crange_box_E_min=wx.TextCtrl(self.tab_S,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.crange_box_E_min.Bind(wx.EVT_TEXT_ENTER, self.on_crange_box_E, self.crange_box_E_min)
+		self.crange_text_E_max=wx.StaticText(self.tab_S,label='--  Color Range Max: ')
+		self.crange_box_E_max=wx.TextCtrl(self.tab_S,size=(200,-1), value='', style=wx.TE_PROCESS_ENTER)
+		self.crange_box_E_max.Bind(wx.EVT_TEXT_ENTER, self.on_crange_box_E, self.crange_box_E_max)		
+		
+		
+		self.SizerV_S=wx.BoxSizer(wx.VERTICAL)
+		self.SizerH10=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH11=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH12=wx.BoxSizer(wx.HORIZONTAL)
+		self.SizerH13=wx.BoxSizer(wx.HORIZONTAL)
+		
+		
+		self.SizerH10.Add(self.crange_text_M_min, 0.2,flag=wx.EXPAND|wx.ALL, border=6)
+		self.SizerH10.Add(self.crange_box_M_min, 0.2,flag=wx.EXPAND|wx.ALL, border=2)
+		self.SizerH10.Add(self.crange_text_M_max, 0.2,flag=wx.EXPAND|wx.ALL, border=5)
+		self.SizerH10.Add(self.crange_box_M_max, 0.2,flag=wx.EXPAND|wx.ALL, border=1)
+		
+		self.SizerH11.Add(self.direct_text_M_S,0.2,flag=wx.EXPAND|wx.TOP,border=7.5)
+		self.SizerH11.Add(self.eigenorder_box_M_S,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.RIGHT,border=3)
+		self.SizerH11.Add(self.plot_button_M_S,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, border=3)
+		self.SizerH11.Add(self.HEALPix_checkbox_M_S,0.2,flag=wx.EXPAND|wx.ALL, border=5)
+		self.SizerH11.Add((100,-1))
+		self.SizerH11.Add(self.cmap_text_M_S,0.2,flag=wx.EXPAND|wx.LEFT|wx.TOP, border=8)
+		self.SizerH11.Add(self.cmap_combobox_M_S,0.2,flag=wx.EXPAND|wx.BOTTOM, border=2.5)
+		self.SizerH11.Add((0, 0), 1, wx.EXPAND)
+		self.SizerH11.Add(self.SaveEigens_button_S,0.2,flag=wx.EXPAND|wx.RIGHT, border=25)
+		
+		self.SizerH12.Add(self.crange_text_E_min, 0.2,flag=wx.EXPAND|wx.ALL, border=6)
+		self.SizerH12.Add(self.crange_box_E_min, 0.2,flag=wx.EXPAND|wx.ALL, border=2)
+		self.SizerH12.Add(self.crange_text_E_max, 0.2,flag=wx.EXPAND|wx.ALL, border=5)
+		self.SizerH12.Add(self.crange_box_E_max, 0.2,flag=wx.EXPAND|wx.ALL, border=1)
+		
+		self.SizerH13.Add(self.direct_text_E_S,0.2,flag=wx.EXPAND|wx.TOP,border=5.5)
+		self.SizerH13.Add(self.eigenorder_box_E_S,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.RIGHT,border=3)
+		self.SizerH13.Add(self.plot_button_E_S,0.2,flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, border=3)
+		self.SizerH13.Add(self.HEALPix_checkbox_E_S,0.2,flag=wx.EXPAND|wx.ALL|wx.LEFT, border=5)
+		self.SizerH13.Add((100,-1))
+		self.SizerH13.Add(self.cmap_text_E_S,0.2,flag=wx.EXPAND|wx.LEFT|wx.TOP, border=8)
+		self.SizerH13.Add(self.cmap_combobox_E_S,0.2,flag=wx.EXPAND|wx.BOTTOM, border=2.5)
+		
+		self.SizerV_S.Add(self.SizerH10,0.2,flag=wx.EXPAND|wx.ALL,border=3)
+		self.SizerV_S.Add(self.SizerH11,0.2,flag=wx.EXPAND|wx.BOTTOM,border=12)
+		self.SizerV_S.Add(self.SizerH12,0.2,flag=wx.EXPAND|wx.TOP,border=12)
+		self.SizerV_S.Add(self.SizerH13,0.2,flag=wx.EXPAND|wx.ALL,border=2)
+		
+		self.tab_S.SetSizer(self.SizerV_S)
+
+
+							
+				
+	
+			
+	def Construct_notebook(self):
+			
+		self.tab_M.SetBackgroundColour('Light Blue')
+		self.notebook.AddPage(self.tab_M, 'Matrix Control')
+		
+		self.tab_E.SetBackgroundColour('Orange')
+		self.notebook.AddPage(self.tab_E, 'Eigens Control')
+		
+		self.tab_S.SetBackgroundColour('Light Green')
+		self.notebook.AddPage(self.tab_S, 'Superior Control')
+	
+
+
+
+
+		
+	def Construct_menubar(self):
+		
+		self.Settingmenu_tab1=wx.Menu()
+		self.Settingmenu_logvalues_x_M = self.Settingmenu_tab1.Append(203,'Logscale Eigenvalues_X', kind=wx.ITEM_CHECK)
+		self.Settingmenu_logvalues_y_M = self.Settingmenu_tab1.Append(204,'Logscale Eigenvalues_Y', kind=wx.ITEM_CHECK)		
+		self.Settingmenu_logvectors_x_M = self.Settingmenu_tab1.Append(201,'Logscale Eigenvectors_X', kind=wx.ITEM_CHECK)
+		self.Settingmenu_logvectors_y_M = self.Settingmenu_tab1.Append(202,'Logscale Eigenvectors_Y', kind=wx.ITEM_CHECK)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvalues_x_M, self.Settingmenu_logvalues_x_M)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvalues_y_M, self.Settingmenu_logvalues_y_M)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvectors_x_M, self.Settingmenu_logvectors_x_M)		
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvectors_y_M, self.Settingmenu_logvectors_y_M)
+
+		
+		self.Settingmenu_tab2=wx.Menu()
+		self.Settingmenu_logvalues_x_E = self.Settingmenu_tab2.Append(207,'Logscale Eigenvalues_X', kind=wx.ITEM_CHECK)
+		self.Settingmenu_logvalues_y_E = self.Settingmenu_tab2.Append(208,'Logscale Eigenvalues_Y', kind=wx.ITEM_CHECK)		
+		self.Settingmenu_logvectors_x_E = self.Settingmenu_tab2.Append(205,'Logscale Eigenvectors_X', kind=wx.ITEM_CHECK)
+		self.Settingmenu_logvectors_y_E = self.Settingmenu_tab2.Append(206,'Logscale Eigenvectors_Y', kind=wx.ITEM_CHECK)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvalues_x_E, self.Settingmenu_logvalues_x_E)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvalues_y_E, self.Settingmenu_logvalues_y_E)
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvectors_x_E, self.Settingmenu_logvectors_x_E)		
+		self.Bind(wx.EVT_MENU, self.on_Settingmenu_logvectors_y_E, self.Settingmenu_logvectors_y_E)
+
+		
+		self.Helpmenu=wx.Menu()
+		self.Helpmenu_instructions = self.Helpmenu.Append(wx.ID_HELP, 'Brief Instuctions',' Tell you how to use this program ')
+		self.Helpmenu_about = self.Helpmenu.Append(wx.ID_ABOUT, 'Information',' Introduction of this program ')
+		self.Bind(wx.EVT_MENU, self.on_Helpmenu_instructions, self.Helpmenu_instructions)
+		self.Bind(wx.EVT_MENU, self.on_Helpmenu_about, self.Helpmenu_about)
+		
+		self.menubar.Append(self.Settingmenu_tab1, '  Settings for Matrix Control  ')
+		self.menubar.Append(self.Settingmenu_tab2, '  Settings for Eigens Control  ')		
+		self.menubar.Append(self.Helpmenu, '  Help and Instructions  ')
+	
+	
+	def on_Settingmenu_logvectors_x_M(self,event):
+		if self.Settingmenu_logvectors_x_M.IsChecked():
+			self.scale_vectors_x_M='log'
+		else:
+			self.scale_vectors_x_M='linear'
+		
+	def on_Settingmenu_logvectors_y_M(self,event):
+		if self.Settingmenu_logvectors_y_M.IsChecked():
+			self.scale_vectors_y_M='log'
+		else:
+			self.scale_vectors_y_M='linear'
+		
+	def on_Settingmenu_logvalues_x_M(self,event):
+		if self.Settingmenu_logvalues_x_M.IsChecked():
+			self.scale_values_x_M='log'
+		else:
+			self.scale_values_x_M='linear'
+		
+	def on_Settingmenu_logvalues_y_M(self,event):
+		if self.Settingmenu_logvalues_y_M.IsChecked():
+			self.scale_values_y_M='log'
+		else:
+			self.scale_values_y_M='linear'
+			
+	def on_Settingmenu_logvectors_x_E(self,event):
+		if self.Settingmenu_logvectors_x_E.IsChecked():
+			self.scale_vectors_x_E='log'
+		else:
+			self.scale_vectors_x_E='linear'
+		
+	def on_Settingmenu_logvectors_y_E(self,event):
+		if self.Settingmenu_logvectors_y_E.IsChecked():
+			self.scale_vectors_y_E='log'
+		else:
+			self.scale_vectors_y_E='linear'
+		
+	def on_Settingmenu_logvalues_x_E(self,event):
+		if self.Settingmenu_logvalues_x_E.IsChecked():
+			self.scale_values_x_E='log'
+		else:
+			self.scale_values_x_E='linear'
+		
+	def on_Settingmenu_logvalues_y_E(self,event):
+		if self.Settingmenu_logvalues_y_E.IsChecked():
+			self.scale_values_y_E='log'
+		else:
+			self.scale_values_y_E='linear'
+		
+		
+	def on_Helpmenu_instructions(self,event):
+		dlg = wx.MessageDialog(self, 
+								'Tip 1: You can either browse or type your meterials(matrix,mask,eigenvalues or eigenvectors).\n''\n'
+								"Tip 2: You can either press ENTER or 'Inpyut' button to let us check and load your materials.\n"'\n'
+								"TIP 3: If you want to use the material, which is valid of course, please check the checkbox besides it.\n"'\n'
+								"Tip 4: if your material are masked, make sure you have input and checked the checkbox of the mask before inputting the material.\n" "So that we can use it to check, decipher and load them \n" '\n'
+								"Tip 5: You can either press ENTER or 'Plot' buttun to plot specific order of eigenvectors and values.\n"'\n'
+								"Tip 6: You can either press ENTER or select in the 'Dropdown Combobox' to choose your favoured colormap.\n"'\n'
+								"Tip 7: If thing goes wrong, you will be always notified\n" "While if things goes well,you may not, but don't worry.\n"'\n'
+								"Tip 8: Eigenvalues and eigenvectors will be saved into the same file as your running python program with filename related to your the filename of your matrix.\n"'\n'
+								"Tip 9: Both masked and unmasked eigenvectors will be saved respectively.\n"'\n'
+								 "Tip 10: If you input unmasked eigenvectors which is deciphered from a masked one.\n""Make sure you have still provided your mask!\n"'\n'
+								 "Tip 11: You can control both tabs in the 'Superior Control Tab' absolutely seperately.\n""Upper two for 'Matrix Control', while lower two for 'Eigens Control'\n"'\n'
+								 "Tip 12: Set up the color range in the min and max box respectively and then ENTER.\n" "Notice that it will initiate to fit data if you press Plot again!\n"'\n'
+								 "Tip 13: Matrix Control and Eigens Control are synchronized with their counterpart in 'Superior Control'.\n" "Which is really convient for operating in defferent tabs."
+								  'A Brief Instuctions', wx.OK)
+		dlg.ShowModal()
+		dlg.Destroy()
+
+	def on_Helpmenu_about(self,event):
+		dlg = wx.MessageDialog(self, 
+						"This program gives you ability to check, ovserve and save the Eigenvectors and Eigenvalues of a Matrix.\n" "No matter it is masked or not!",
+						  'Introction to Visual Error-Sky', wx.OK)
+		dlg.ShowModal()
+		dlg.Destroy()
+
+
+
+
+
+
+
+		
+	def set_eigens_M(self):			
+		if self.Matrix_checkbox.IsChecked():
+			if self.Matrix_status==1:
+				self.eigenvalues=self.Eigenvalues_Refined_M	
+				self.eigenvectors=self.Eigenvectors_Refined_M
+	 
+	def plot_vector_M(self):
+		
+		self.set_eigens_M()
+		self.cmap_M=self.cmap_combobox_M.GetValue()
+		
+		inputstr=self.eigenorder_box_M.GetValue()
+		if inputstr=='':
+			inputstr='0'
+
+		self.choice_M=int(float(inputstr))
+	
+		if -1<self.choice_M<1:
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+			#self.axevalues.clear()
+			self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+			self.canvas_vectors.draw()
+			self.canvas_values.draw()	
+			
+		else:
+			if self.choice_M<0:
+				self.choice_M=self.choice_M+len(self.eigenvalues)+1
+				
+			self.crange_box_M_min.SetValue('%f'%min(self.eigenvectors[self.choice_M-1]))
+			self.crange_box_M_max.SetValue('%f'%max(self.eigenvectors[self.choice_M-1]))
+			self.eigenorder_box_M_S.SetValue('%i'%self.choice_M)
+		
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+			#self.axevalues.clear()
+				
+			if self.check_status_M==0:	
+				if self.scale_vectors_y_M=='linear':
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_M-1],'ro-',markersize=3)
+
+				elif self.scale_vectors_y_M=='log':
+					self.H=self.axevectors.plot(abs(self.eigenvectors[self.choice_M-1]),'go-',markersize=3)
+
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_M-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_M)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_M)
+				self.axevectors.set_title('Eigenvalue=%f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])		
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+				
+			else:
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])						
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+	 
+	def on_HEALPix_checkbox_M(self,event):
+		
+		self.set_eigens_M()	
+		
+		inputstr=self.eigenorder_box_M.GetValue()
+		if inputstr=='':
+			inputstr='0'
+		self.choice_M=int(float(inputstr))
+		
+		if self.HEALPix_checkbox_M.IsChecked():
+			self.check_status_M=1
+			self.cmap_M=self.cmap_combobox_M.GetValue()
+			if self.choice_M!=0:
+				self.choice_M_H=self.choice_M
+				
+				if self.choice_M_H<=0:
+					self.choice_M_H=self.choice_M_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				self.canvas_vectors.draw()
+			
+		else:
+			self.check_status_M=0
+			if self.choice_M!=0:
+				self.choice_M_H=self.choice_M
+			
+				if self.choice_M_H<=0:
+					self.choice_M_H=self.choice_M_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.H=self.axevectors.plot(self.eigenvectors[self.choice_M_H-1],'ro-',markersize=3)
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_M-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_M)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_M)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				self.canvas_vectors.draw()
+					
+	def on_text_enter_M(self,event):
+		self.plot_vector_M()
+
+	def on_plot_button_M(self,event):
+		self.plot_vector_M()
+		
+	def on_cmap_combobox_M(self,event):
+		self.set_eigens_M()
+		self.cmap_M=self.cmap_combobox_M.GetValue()
+		if self.HEALPix_checkbox_M.IsChecked():
+			if self.choice_M!=0:
+				self.choice_M_H=self.choice_M
+				
+				if self.choice_M_H<=0:
+					self.choice_M_H=self.choice_M_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				self.canvas_vectors.draw()
+				
+	def on_cmap_combobox_text_M(self,event):
+		self.set_eigens_M()
+		self.cmap_M=event.GetString()
+		if self.HEALPix_checkbox_M.IsChecked():
+			if self.choice_M!=0:
+				self.choice_M_H=self.choice_M
+				
+				if self.choice_M_H<=0:
+					self.choice_M_H=self.choice_M_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				self.canvas_vectors.draw()
+
+	 
+	def on_Matrix(self):	
+		inputfile=self.Matrix_box.GetValue()
+		
+		if os.path.isfile(inputfile):
+	
+			self.Matrix_Raw=np.fromfile('%s'%inputfile,dtype=self.dtype_Matrix)
+			
+			Dimension=np.sqrt(len(self.Matrix_Raw))
+			Dimension=int(Dimension)
+			
+			if Dimension**2!=len(self.Matrix_Raw):
+				self.Matrix_status=0
+				dialog = wx.MessageDialog(self, 'The Matrix You Input is not "HEALPixable"\n' 'Please Re-choose one which is Square!', 'Hi, Watch Out!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+			
+			else:	
+				self.Matrix_Raw=np.reshape(self.Matrix_Raw,(Dimension,Dimension))
+				if self.Mask_M_status==1:
+					if np.sum(self.Mask_M_Refined)==Dimension:
+						self.Matrix_status=1
+						length=len(self.Mask_M_Refined)
+						self.Eigenvalues_Raw_Mask_Med_M, self.Eigenvectors_Raw_Mask_Med_M_T=la.eigh(self.Matrix_Raw)
+						self.Eigenvectors_Raw_Mask_Med_M=self.Eigenvectors_Raw_Mask_Med_M_T.T
+						self.eigenvectors_save_M=self.Eigenvectors_Raw_Mask_Med_M
+						self.Eigenvectors_Raw_M=np.zeros((Dimension,length))
+						
+						self.Eigenvectors_Raw_M[:,self.Mask_M_Refined.astype(bool)]=self.Eigenvectors_Raw_Mask_Med_M
+						self.Eigenvectors_Refined_M=self.Eigenvectors_Raw_M
+						self.Eigenvalues_Refined_M=self.Eigenvalues_Raw_Mask_Med_M
+						dialog = wx.MessageDialog(self, 'The Matrix You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+						
+					else:
+						dialog = wx.MessageDialog(self, 'The Matrix You Input does Not Match your Mask\n' 'However, Eigenvectors and values derived from This Matrix have Priority', 'Hi, Watch Out!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+						Nside=np.sqrt(Dimension/12.0)
+						adplength=int(Nside)**2*12.0
+						if adplength!=Dimension:
+							self.Matrix_status=0
+							dialog = wx.MessageDialog(self, 'The Matrix You Input is not "HEALPixable"\n' 'Please Re-choose one with Shape: (12*(n^2),12*(n^2))', 'Hi, Watch Out!', wx.OK)
+							dialog.ShowModal()
+							dialog.Destroy()
+						elif self.Matrix_Raw_M.T!=self.Matrix_Raw_M:
+							self.Matrix_status=0
+							dialog = wx.MessageDialog(self, 'The Matrix You Input is not "HEALPixable"\n' 'Please Re-choose one which is Symmetric or Hermitian', 'Hi, Watch Out!', wx.OK)
+							dialog.ShowModal()
+							dialog.Destroy()
+						else:
+							self.Matrix_status=1
+							self.Matrix_Refined=Matrix_Raw
+							self.Eigenvalues_Refined_M, self.Eigenvectors_Refined_M=la.eigh(self.Matrix_Refined)
+							self.eigenvectors_save_M=self.Eigenvectors_Refined_M
+							dialog = wx.MessageDialog(self, 'The Matrix You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+							dialog.ShowModal()
+							dialog.Destroy()
+							
+				else:										
+					Nside=np.sqrt(Dimension/12.0)
+					adplength=int(Nside)**2*12.0
+					if adplength!=Dimension:
+						self.Matrix_status=0
+						dialog = wx.MessageDialog(self, 'The Matrix You Input is not "HEALPixable"\n' 'Please Re-choose one with Shape: (12*(n^2),12*(n^2))\n' 'Or maybe you need check the check box of the mask if you have one', 'Hi, Watch Out!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+					elif self.Matrix_Raw_M.T!=Matrix_Raw_M:
+						self.Matrix_status=0
+						dialog = wx.MessageDialog(self, 'The Matrix You Input is not "HEALPixable"\n' 'Please Re-choose one which is Symmetric or Hermitian', 'Hi, Watch Out!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+					else:
+						self.Matrix_status=1
+						self.Matrix_Refined=self.Matrix_Raw
+						self.Eigenvalues_Refined_M, self.Eigenvectors_Refined_M=la.eigh(self.Matrix_Refined)
+						self.eigenvectors_save_M=self.Eigenvectors_Refined_M
+						dialog = wx.MessageDialog(self, 'The Matrix You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+						
+		else:
+			dialog = wx.MessageDialog(self, 'The FilePath You Input is Invalud"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()	 
+
+	def on_Mask_M(self):
+		
+		inputfile=self.Mask_M_box.GetValue()
+		
+		if os.path.isfile(inputfile):
+			
+			self.Mask_M_Raw=np.fromfile('%s'%inputfile,dtype=self.dtype_Mask_M)
+			
+			Dimension=len(self.Mask_M_Raw)
+			
+			Nside=np.sqrt(Dimension/12.0)
+			adplength=int(Nside)**2*12.0
+			
+			if adplength!=Dimension:
+				self.Mask_M_status_Raw=0
+				dialog = wx.MessageDialog(self, 'The Mask You Input is NOT derived from a "HEALPixable Vector"\n' 'Please Re-choose one with Shape: (1,12*(n^2))', 'Hi, Watch Out!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+	
+			elif self.Mask_M_status==1:
+				self.Mask_M_status_Raw=1
+				self.Mask_M_Refined=self.Mask_M_Raw
+				dialog = wx.MessageDialog(self, 'The Mask You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+				self.on_Matrix()
+										
+			elif self.Mask_M_status==0:
+				self.Mask_M_status_Raw=1
+				dialog = wx.MessageDialog(self, 'The Mask You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+				self.Mask_M_Refined=self.Mask_M_Raw
+		else:
+			dialog = wx.MessageDialog(self, 'The FilePath You Input is Invalud"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()				
+
+		
+	def on_Matrix_box(self,event):
+		self.on_Matrix()
+					
+	def on_InputMatrix_button(self,event):
+		self.on_Matrix()
+		
+	def on_Matrix_checkbox(self,event):
+
+		if self.Matrix_status!=1:
+			dialog = wx.MessageDialog(self, 'The Matrix you Input in This Box will Not be Used, \n' 'Since it is Not Qualified!', "Hi, Watch Out!", wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()
+		else:	
+			self.eigenvalues=self.Eigenvalues_Refined_M	
+			self.eigenvectors=self.Eigenvectors_Refined_M
+			self.choice_M=len(self.eigenvalues)
+			self.eigenorder_box_M.SetValue('%i'%self.choice_M)
+			
+			self.crange_box_M_min.SetValue('%f'%min(self.eigenvectors[self.choice_M-1]))
+			self.crange_box_M_max.SetValue('%f'%max(self.eigenvectors[self.choice_M-1]))
+			self.eigenorder_box_M_S.SetValue('%i'%self.choice_M)
+		
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+	
+			if self.check_status_M==0:	
+				self.H=self.axevectors.plot(self.eigenvectors[self.choice_M-1],'ro-',markersize=3)
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_M-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_M)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_M)
+				self.axevectors.set_title('Eigenvalue=%f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])					
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+				
+			else:
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=23)
+				self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+				self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+				self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+				self.axevalues.set_xlimit(0,len(self.eigenvalues))
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])		
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M-1],int(self.choice_M)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()	
+			
+					
+	def on_BrowseMatrix_button(self, event):
+		dialog = wx.FileDialog(self, 'Please Choose a Matrix from file','','','*.*',wx.OPEN)
+		if dialog.ShowModal() == wx.ID_OK:
+			userProvidedFilename = True
+			self.filename_M = dialog.GetFilename()
+			self.dirname_M = dialog.GetDirectory()
+			self.passname_M = dialog.GetPath()
+			self.Matrix_box.SetValue('%s'%self.passname_M)
+		else:
+			userProvidedFilename = False
+		dialog.Destroy()
+		return userProvidedFilename		
+
+		
+	def on_Mask_M_box(self,event):
+		self.on_Mask_M()
+		
+	def on_InputMask_M_button(self,event):
+		self.on_Mask_M()
+		
+	def on_Mask_M_checkbox(self,event):
+
+		if self.Mask_M_checkbox.IsChecked():
+			if self.Mask_M_status_Raw==1:
+				self.Mask_M_status=1
+				if self.Matrix_checkbox.IsChecked():
+					self.on_Matrix()
+				else:
+					dialog = wx.MessageDialog(self, 'There is No Eigenvectors or values Ready to be Masked yet\n' "Don't forget to Input one!'", "Hi, Watch Out!", wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+			else:
+				self.Mask_M_status=0
+				dialog = wx.MessageDialog(self, 'The Eigenvalues you Input in This Box will Not be Applied to any Masked Eigenvectors, \n' 'Since it is Not Qualified!', "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+						
+		elif self.Mask_M_checkbox.IsChecked()==False:
+			self.Mask_M_status=0
+			if self.Matrix_checkbox.IsChecked():
+				self.on_Matrix()
+			else:
+				dialog = wx.MessageDialog(self, 'There is No Eigenvectors Ready to be Masked yet\n' "Don't forget to Input one!'", "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+						
+	def on_BrowseMask_M_button(self, event):
+		dialog = wx.FileDialog(self, 'Please Choose a Mask from file','','','*.*',wx.OPEN)
+		if dialog.ShowModal() == wx.ID_OK:
+			userProvidedFilename = True
+			self.filename = dialog.GetFilename()
+			self.dirname = dialog.GetDirectory()
+			self.passname = dialog.GetPath()
+			self.Mask_M_box.SetValue('%s'%self.passname)
+		else:
+			userProvidedFilename = False
+		dialog.Destroy()
+		return userProvidedFilename		
+		
+
+
+
+
+
+
+		
+	def set_eigens_E(self):
+		if self.Eigenvalues_checkbox.IsChecked():
+			if self.Eigenvalues_status==1:
+				self.eigenvalues=self.Eigenvalues_Refined
+				if self.Eigenvectors_checkbox.IsChecked():
+					if self.Eigenvectors_status==0:
+						self.eigenvectors=np.zeros((len(self.eigenvalues),len(self.eigenvalues)))*np.nan
+				else:
+					self.eigenvectors=np.zeros((len(self.eigenvalues),len(self.eigenvalues)))*np.nan
+				
+		if self.Eigenvectors_checkbox.IsChecked():
+			if self.Eigenvectors_status==1:
+				self.eigenvectors=self.Eigenvectors_Refined
+				if self.Eigenvalues_checkbox.IsChecked():
+					if self.Eigenvalues_status==0:
+						self.eigenvalues=np.zeros(len(self.eigenvectors))*np.nan
+				else:
+					self.eigenvalues=np.zeros(len(self.eigenvectors))*np.nan
+				
+	def plot_vector_E(self):
+		
+		self.set_eigens_E()
+		self.cmap_E=self.cmap_combobox_E.GetValue()
+		
+		inputstr=self.eigenorder_box_E.GetValue()
+		if inputstr=='':
+			inputsrt='0'
+			
+		self.choice_E=int(float(inputstr))
+	
+		if -1<self.choice_E<1:
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.axevalues.clear()
+			self.axevalues.plot(self.eigenvalues,linewidth=2)
+			self.canvas_vectors.draw()
+			self.canvas_values.draw()
+			
+		else:
+			if self.choice_E<0:
+				self.choice_E=self.choice_E+len(self.eigenvalues)+1
+				
+			self.crange_box_E_min.SetValue('%f'%min(self.eigenvectors[self.choice_E-1]))
+			self.crange_box_E_max.SetValue('%f'%max(self.eigenvectors[self.choice_E-1]))
+			self.eigenorder_box_E_S.SetValue('%i'%self.choice_E)
+		
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+				
+			if self.check_status_E==0:	
+				if self.scale_vectors_y_E=='linear':
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_E-1],'ro-',markersize=3)
+
+				elif self.scale_vectors_y_E=='log':
+					self.H=self.axevectors.plot(abs(self.eigenvectors[self.choice_E-1]),'go-',markersize=3)
+
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+
+				if self.scale_values_y_E=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_E=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+								
+				if self.Eigenvalues_status==1:
+					self.axevalues.set_title('Eigenvalue=%.4f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=17)
+				else:
+					self.axevalues.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=17)
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+				
+			else:
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H,origin='lower',cmap='%s'%self.cmap_E)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+				if self.scale_values_y_E=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_E=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+				
+				if self.Eigenvalues_status==1:
+					self.axevalues.set_title('Eigenvalue=%.4f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=17)
+				else:
+					self.axevalues.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=17)
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+	 
+	def on_HEALPix_checkbox_E(self,event):
+		
+		self.set_eigens_E()
+		
+		inputstr=self.eigenorder_box_E.GetValue()
+		if inputstr=='':
+			inputsrt='0'		
+		self.choice_E=int(float(inputstr))
+		
+		if self.HEALPix_checkbox_E.IsChecked():
+			self.check_status_E=1
+			self.cmap_E=self.cmap_combobox_E.GetValue()
+			if self.choice_E!=0:
+				self.choice_E_H=self.choice_E
+				
+				if self.choice_E_H<=0:
+					self.choice_E_H=self.choice_E_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+				self.canvas_vectors.draw()
+			
+		else:
+			self.check_status_E=0
+			if self.choice_E!=0:
+				self.choice_E_H=self.choice_E
+			
+				if self.choice_E_H<=0:
+					self.choice_E_H=self.choice_E_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.H=self.axevectors.plot(self.eigenvectors[self.choice_E_H-1],'ro-',markersize=3)
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+				self.canvas_vectors.draw()
+	
+	def on_text_enter_E(self,event):
+		self.plot_vector_E()
+
+	def on_plot_button_E(self,event):
+		self.plot_vector_E()
+
+	def on_cmap_combobox_E(self,event):
+		self.set_eigens_E()
+		self.cmap_E=self.cmap_combobox_E.GetValue()
+		if self.HEALPix_checkbox_E.IsChecked():
+			if self.choice_E!=0:
+				self.choice_E_H=self.choice_E
+				
+				if self.choice_E_H<=0:
+					self.choice_E_H=self.choice_E_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				self.canvas_vectors.draw()
+				
+	def on_cmap_combobox_text_E(self,event):
+		self.set_eigens_E()
+		self.cmap_E=event.GetString()
+		if self.HEALPix_checkbox_E.IsChecked():
+			if self.choice_E!=0:
+				self.choice_E_H=self.choice_E
+				
+				if self.choice_E_H<=0:
+					self.choice_E_H=self.choice_E_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+				self.canvas_vectors.draw()
+
+	
+	def on_Eigenvalues(self):
+		
+		inputfile=self.Eigenvalues_box.GetValue()
+		
+		if os.path.isfile(inputfile):
+			
+			self.Eigenvalues_Raw=np.fromfile('%s'%inputfile,dtype=self.dtype_Eigenvalues)
+			self.Eigenvalues_Raw=sorted(self.Eigenvalues_Raw)
+			self.Eigenvalues_Raw=np.array(self.Eigenvalues_Raw)
+			
+			Dimension=len(self.Eigenvalues_Raw)
+			
+			Nside=np.sqrt(Dimension/12.0)
+			adplength=int(Nside)**2*12.0
+			if self.Mask_E_status==1:
+				if np.sum(self.Mask_E_Refined)==Dimension:
+					self.Eigenvalues_Refined=np.array(sorted(self.Eigenvalues_Raw))
+					self.Eigenvalues_status=1
+					dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+				else:
+					if adplength!=Dimension:
+						self.Eigenvalues_status=0
+						dialog = wx.MessageDialog(self, 'The Eigenvalues You Input is NOT derived from a "HEALPixable Matrix"\n' 'Please Re-choose one with Shape: (1,12*(n^2))', 'Hi, Watch Out!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+					else:
+						self.Eigenvalues_status=1
+						dialog = wx.MessageDialog(self, 'The Eigenvalues You Input does Not Match the Mask!\n''However, it will be still Used as an Unmasked one.' "Hi, May I have your Attention please!", wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+						self.Eigenvalues_Refined=np.array(sorted(self.Eigenvalues_Raw))
+			
+			else:
+				if adplength!=Dimension:
+					self.Eigenvalues_status=0
+					dialog = wx.MessageDialog(self, 'The Eigenvalues You Input is NOT derived from a "HEALPixable Matrix"\n' 'Please Re-choose one with Shape: (1,12*(n^2))', 'Hi, Watch Out!', wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+				else:
+					self.Eigenvalues_status=1
+					self.Eigenvalues_Refined=np.array(sorted(self.Eigenvalues_Raw))
+					dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+					
+		else:
+			dialog = wx.MessageDialog(self, 'The FilePath You Input is Invalud"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()
+				
+	def on_Eigenvectors(self):
+		
+		inputfile=self.Eigenvectors_box.GetValue()
+		
+		if os.path.isfile(inputfile):
+			
+			self.Eigenvectors_Raw_Mask_Eed=np.fromfile('%s'%inputfile,dtype=self.dtype_Eigenvectors)
+			
+			
+			Dimension=np.sqrt(len(self.Eigenvectors_Raw_Mask_Eed))
+			Dimension=int(Dimension)
+			
+			if self.Mask_E_status==1:
+				
+				if Dimension**2!=len(self.Eigenvectors_Raw_Mask_Eed):
+					
+					if (len(self.Eigenvectors_Raw_Mask_Eed)-1)<np.sum(self.Mask_E_Refined)*len(self.Mask_E_Refined)<(len(self.Eigenvectors_Raw_Mask_Eed)+1):							
+						self.Eigenvectors_status=1
+						self.Eigenvectors_Raw_Mask_Eed=np.reshape(self.Eigenvectors_Raw_Mask_Eed,(np.sum(self.Mask_E_Refined),len(self.Mask_E_Refined)))
+						self.Eigenvectors_Refined=self.Eigenvectors_Raw_Mask_Eed
+						dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+							
+					else:
+						self.Eigenvectors_status=0
+						dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is not "HEALPixable"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+						dialog.ShowModal()
+						dialog.Destroy()
+				else:
+					self.Eigenvectors_Raw_Mask_Eed=np.reshape(self.Eigenvectors_Raw_Mask_Eed,(Dimension,Dimension))
+					if self.Mask_E_status==1:
+						length=len(self.Mask_E_Refined)
+						self.Eigenvectors_Raw=np.zeros((Dimension,length))
+						
+						if Dimension!=np.sum(self.Mask_E_Raw):
+							self.Eigenvectors_status=0
+							dialog = wx.MessageDialog(self, 'The Eigenvectors You Input does not match the Mask you Input below!\n' 'Please Check your self.Eigenvectors or Mask!', 'Hi, Watch Out!', wx.OK)
+							dialog.ShowModal()
+							dialog.Destroy()
+										
+						else:
+							self.Eigenvectors_status=1
+
+							self.Eigenvectors_Raw[:,self.Mask_E_Refined.astype(bool)]=self.Eigenvectors_Raw_Mask_Eed
+							self.Eigenvectors_Refined=self.Eigenvectors_Raw
+							dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+							dialog.ShowModal()
+							dialog.Destroy()
+							
+			elif Dimension**2!=len(self.Eigenvectors_Raw_Mask_Eed):		
+				self.Eigenvectors_status=0
+				dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is not "HEALPixable"\n' 'Please Re-choose one which is Square!', 'Hi, Watch Out!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+			
+			
+			else:			
+				Nside=np.sqrt(Dimension/12.0)
+				adplength=int(Nside)**2*12.0
+				
+				if adplength!=Dimension:
+					self.Eigenvectors_status=0
+					dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is not "HEALPixable"\n' 'Please Re-choose one with Shape: (12*(n^2),12*(n^2))', 'Hi, Watch Out!', wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+				else:
+					self.Eigenvectors_Raw=self.Eigenvectors_Raw_Mask_Eed
+					self.Eigenvectors_status=1
+					self.Eigenvectors_Refined=self.Eigenvectors_Raw
+					dialog = wx.MessageDialog(self, 'The Eigenvectors You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+			
+		else:
+			dialog = wx.MessageDialog(self, 'The FilePath You Input is Invalud"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()
+
+	def on_Mask_E(self):
+		
+		inputfile=self.Mask_E_box.GetValue()
+		
+		if os.path.isfile(inputfile):
+
+			self.Mask_E_Raw=np.fromfile('%s'%inputfile,dtype=self.dtype_Mask_E)
+			
+			Dimension=len(self.Mask_E_Raw)
+			
+			Nside=np.sqrt(Dimension/12.0)
+			adplength=int(Nside)**2*12.0
+			
+			if adplength!=Dimension:
+				self.Mask_E_status_Raw=0
+				dialog = wx.MessageDialog(self, 'The Mask You Input is NOT derived from a "HEALPixable Vector"\n' 'Please Re-choose one with Shape: (1,12*(n^2))', 'Hi, Watch Out!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+	
+			elif self.Mask_E_status==1:
+				self.Mask_E_status_Raw=1
+				self.Mask_E_Refined=self.Mask_E_Raw
+				dialog = wx.MessageDialog(self, 'The Mask You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+				self.on_Eigenvalues()
+				self.on_Eigenvectors()
+										
+			elif self.Mask_E_status==0:
+				self.Mask_E_status_Raw=1
+				dialog = wx.MessageDialog(self, 'The Mask You Input is Successfully Loaded', 'Hi, Cool!', wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+				self.Mask_E_Refined=self.Mask_E_Raw
+		else:
+			dialog = wx.MessageDialog(self, 'The FilePath You Input is Invalud"\n' 'Please Re-choose one!', 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()
+	
+
+	def on_Eigenvalues_box(self,event):
+		self.on_Eigenvalues()
+			
+	def on_InputEigenvalues_button(self,event):
+		self.on_Eigenvalues()
+		
+	def on_Eigenvalues_checkbox(self,event):
+		if self.Eigenvalues_checkbox.IsChecked():
+			if self.Eigenvalues_status==1:
+				dialog = wx.MessageDialog(self, 'The Eigenvalues You Input will be Used', "Hi, That's Great!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+
+				self.set_eigens_E()
+				
+				self.choice_E=len(self.Eigenvalues_Refined)
+				self.eigenorder_box_E.SetValue('%i'%self.choice_E)
+				
+				self.crange_box_E_min.SetValue('%f'%min(self.eigenvectors[self.choice_E-1]))
+				self.crange_box_E_max.SetValue('%f'%max(self.eigenvectors[self.choice_E-1]))
+				self.eigenorder_box_E_S.SetValue('%i'%self.choice_E)
+			
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				self.Eigen_values.clear()
+				self.axevalues=self.Eigen_values.add_subplot(111)
+				#self.axevalues.clear()
+					
+				if self.check_status_E==0:	
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_E-1],'ro-',markersize=3)
+					self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E-1]))
+					self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+					self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+					if self.scale_values_y_E=='linear':
+						self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))					
+						self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+					elif self.scale_values_y_E=='log':
+						self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))
+						self.axevalues.set_ylim(0,max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+					self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=17)
+					
+					self.canvas_vectors.draw()
+					self.canvas_values.draw()
+					
+				else:
+					self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E-1],return_projected_map=True)
+					
+					self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E)
+					self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+					if self.scale_values_y_E=='linear':
+						self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))					
+						self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+					elif self.scale_values_y_E=='log':
+						self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))
+						self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+					self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=17)
+					
+					self.canvas_vectors.draw()
+					self.canvas_values.draw()
+			else:
+				dialog = wx.MessageDialog(self, 'The Eigenvalues you Input in This Box will Not be plotted, \n' 'Since it is Not Qualified!', "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+		
+	def on_BrowseEigenvalues_button(self, event):
+		dialog = wx.FileDialog(self, 'Please Choose a Eigenvalues from file','','','*.*',wx.OPEN)
+		if dialog.ShowModal() == wx.ID_OK:
+			userProvidedFilename = True
+			self.filename = dialog.GetFilename()
+			self.dirname = dialog.GetDirectory()
+			self.passname = dialog.GetPath()
+			self.Eigenvalues_box.SetValue('%s'%self.passname)
+		else:
+			userProvidedFilename = False
+		dialog.Destroy()
+		return userProvidedFilename
+
+
+	def on_Eigenvectors_box(self,event):
+		self.on_Eigenvectors()			
+									
+	def on_InputEigenvectors_button(self,event):
+		self.on_Eigenvectors()
+		
+	def on_Eigenvectors_checkbox(self,event):
+		if self.Eigenvectors_checkbox.IsChecked():
+			if self.Eigenvectors_status==1:
+				dialog = wx.MessageDialog(self, 'The Eigenvectors You Input will be Used', "Hi, That's Great!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+
+				self.set_eigens_E()
+				
+				self.choice_E=len(self.Eigenvectors_Refined)
+				self.eigenorder_box_E.SetValue('%i'%self.choice_E)
+				
+				self.crange_box_E_min.SetValue('%f'%min(self.eigenvectors[self.choice_E-1]))
+				self.crange_box_E_max.SetValue('%f'%max(self.eigenvectors[self.choice_E-1]))
+				self.eigenorder_box_E_S.SetValue('%i'%self.choice_E)
+				
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				self.Eigen_values.clear()
+				self.axevalues=self.Eigen_values.add_subplot(111)
+				#self.axevalues.clear()
+					
+				if self.check_status_E==0:	
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_E-1],'ro-',markersize=3)
+					self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E-1]))
+					self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+					self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+					if self.Eigenvalues_status==1:
+						self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+					else:
+						self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					if self.scale_values_y_E=='linear':
+						self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))					
+						self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+					elif self.scale_values_y_E=='log':
+						self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))
+						self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+					self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)))
+					
+					self.canvas_vectors.draw()
+					self.canvas_values.draw()
+					
+				else:
+					self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E-1],return_projected_map=True)
+					
+					self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E)
+					self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+					if self.Eigenvalues_status==1:
+						self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)),fontsize=23)
+					else:
+						self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E),fontsize=23)
+					if self.scale_values_y_E=='linear':
+						self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))					
+						self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+					elif self.scale_values_y_E=='log':
+						self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+						self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+						self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+						self.axevalues.set_xlim(0,len(self.eigenvalues))
+						self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+						self.axevalues.plot(np.array([self.choice_E-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+					self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_E-1],int(self.choice_E)))
+					
+					self.canvas_vectors.draw()
+					self.canvas_values.draw()
+
+			else:
+				dialog = wx.MessageDialog(self, 'The Eigenvectors you Input in This Box will Not be plotted, \n' 'Since it is Not Qualified!', "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()	
+		
+	def on_BrowseEigenvectors_button(self, event):
+		dialog = wx.FileDialog(self, 'Please Choose a Eigenvectors from file','','','*.*',wx.OPEN)
+		if dialog.ShowModal() == wx.ID_OK:
+			userProvidedFilename = True
+			self.filename = dialog.GetFilename()
+			self.dirname = dialog.GetDirectory()
+			self.passname = dialog.GetPath()
+			self.Eigenvectors_box.SetValue('%s'%self.passname)
+		else:
+			userProvidedFilename = False
+		dialog.Destroy()
+		return userProvidedFilename
+
+				
+	def on_Mask_E_box(self,event):
+		self.on_Mask_E()
+			
+	def on_InputMask_E_button(self,event):
+		self.on_Mask_E()
+		
+	def on_Mask_E_checkbox(self,event):
+		
+		if self.Mask_E_checkbox.IsChecked():
+			if self.Mask_E_status_Raw==1:
+				self.Mask_E_status=1
+				if self.Eigenvalues_checkbox.IsChecked():
+					self.on_Eigenvalues()
+				if self.Eigenvectors_checkbox.IsChecked():
+					self.on_Eigenvectors()
+				else:
+					dialog = wx.MessageDialog(self, 'There is No Eigenvectors or values to be Mask_Eed yet\n' "Don't forget to Input one!'", "Hi, Watch Out!", wx.OK)
+					dialog.ShowModal()
+					dialog.Destroy()
+			else:
+				self.Mask_E_status=0
+				dialog = wx.MessageDialog(self, 'The Eigenvalues you Input in This Box will Not be Applied to any Mask_Eed Eigenvectors, \n' 'Since it is Not Qualified!', "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+						
+		elif self.Mask_E_checkbox.IsChecked()==False:
+			self.Mask_E_status=0
+			if self.Eigenvalues_checkbox.IsChecked():
+				self.on_Eigenvalues()
+			if self.Eigenvectors_checkbox.IsChecked():
+				self.on_Eigenvectors()
+			else:
+				dialog = wx.MessageDialog(self, 'There is No Eigenvectors to be Mask_Eed yet\n' "Don't forget to Input one!'", "Hi, Watch Out!", wx.OK)
+				dialog.ShowModal()
+				dialog.Destroy()
+		
+	def on_BrowseMask_E_button(self, event):
+		dialog = wx.FileDialog(self, 'Please Choose a Mask from file','','','*.*',wx.OPEN)
+		if dialog.ShowModal() == wx.ID_OK:
+			userProvidedFilename = True
+			self.filename = dialog.GetFilename()
+			self.dirname = dialog.GetDirectory()
+			self.passname = dialog.GetPath()
+			self.Mask_E_box.SetValue('%s'%self.passname)
+		else:
+			userProvidedFilename = False
+		dialog.Destroy()
+		return userProvidedFilename
+
+
+
+
+
+
+
+	def plot_vector_M_S(self):
+		
+		self.set_eigens_M()
+		self.cmap_M_S=self.cmap_combobox_M_S.GetValue()
+		
+		inputstr=self.eigenorder_box_M_S.GetValue()
+		if inputstr=='':
+			inputstr='0'
+
+		self.choice_M_S=int(float(inputstr))
+	
+		if -1<self.choice_M_S<1:
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+			#self.axevalues.clear()
+			self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+			self.canvas_vectors.draw()
+			self.canvas_values.draw()
+			
+			
+		else:
+			if self.choice_M_S<0:
+				self.choice_M_S=self.choice_M_S+len(self.eigenvalues)+1
+			
+			self.crange_box_M_min.SetValue('%f'%min(self.eigenvectors[self.choice_M_S-1]))
+			self.crange_box_M_max.SetValue('%f'%max(self.eigenvectors[self.choice_M_S-1]))
+			self.eigenorder_box_M.SetValue('%i'%self.choice_M_S)
+			
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+			#self.axevalues.clear()
+				
+			if self.check_status_M_S==0:
+					
+				if self.scale_vectors_y_M=='linear':
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_M_S-1],'ro-',markersize=3)
+
+				elif self.scale_vectors_y_M=='log':
+					self.H=self.axevectors.plot(abs(self.eigenvectors[self.choice_M_S-1]),'go-',markersize=3)
+					
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_M_S-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_M)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_M)
+				self.axevectors.set_title('Eigenvalue=%f    Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M_S-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M_S-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])		
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+				
+			else:
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_S-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				if self.scale_values_y_M=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M_S-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_M=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_M)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_M)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_M_S-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])						
+				self.axevalues.set_title('Eigenvalue=%.3f    Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=17)
+				
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+	
+		
+	def on_HEALPix_checkbox_M_S(self,event):
+		self.set_eigens_M()
+		
+		inputstr=self.eigenorder_box_M_S.GetValue()
+		if inputstr=='':
+			inputstr='0'
+		self.choice_M_S=int(float(inputstr))
+		
+		if self.HEALPix_checkbox_M_S.IsChecked():
+			self.check_status_M_S=1
+			self.cmap_M_S=self.cmap_combobox_M_S.GetValue()
+
+			if self.choice_M_S!=0:
+				self.choice_M_S_H=self.choice_M_S
+				
+				if self.choice_M_S_H<=0:
+					self.choice_M_S_H=self.choice_M_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_S_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				self.canvas_vectors.draw()
+			
+		else:
+			self.check_status_M_S=0
+			if self.choice_M_S!=0:
+				self.choice_M_S_H=self.choice_M_S
+			
+				if self.choice_M_S_H<=0:
+					self.choice_M_S_H=self.choice_M_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.H=self.axevectors.plot(self.eigenvectors[self.choice_M_S_H-1],'ro-',markersize=3)
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_M_S-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_M)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_M)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				self.canvas_vectors.draw()
+		
+	def on_text_enter_M_S(self,event):
+		self.plot_vector_M_S()
+		
+	def on_plot_button_M_S(self,event):
+		self.plot_vector_M_S()
+	
+	def on_cmap_combobox_M_S(self,event):
+		self.set_eigens_M()
+		self.cmap_M_S=self.cmap_combobox_M_S.GetValue()
+		if self.HEALPix_checkbox_M_S.IsChecked():
+			if self.choice_M_S!=0:
+				self.choice_M_S_H=self.choice_M_S
+				
+				if self.choice_M_S_H<=0:
+					self.choice_M_S_H=self.choice_M_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_S_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				self.canvas_vectors.draw()
+		
+	def on_cmap_combobox_text_M_S(self,event):
+		self.set_eigens_M()
+		self.cmap_M_S=event.GetString()
+		if self.HEALPix_checkbox_M_S.IsChecked():
+			if self.choice_M_S!=0:
+				self.choice_M_S_H=self.choice_M_S
+				
+				if self.choice_M_S_H<=0:
+					self.choice_M_S_H=self.choice_M_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_S_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', cmap='%s'%self.cmap_M_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				self.canvas_vectors.draw()
+
+	def on_crange_box_M(self,event):
+		inputstr_min=self.crange_box_M_min.GetValue()
+		if inputstr_min!='':	
+			self.H_M_vmin=float(inputstr_min)
+			
+		inputstr_max=self.crange_box_M_max.GetValue()
+		if inputstr_max!='':	
+			self.H_M_vmax=float(inputstr_max)
+			
+		if self.HEALPix_checkbox_M_S.IsChecked():
+			if self.choice_M_S!=0:
+				self.choice_M_S_H=self.choice_M_S
+				
+				if self.choice_M_S_H<=0:
+					self.choice_M_S_H=self.choice_M_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_M_H=hp.mollview(self.eigenvectors[self.choice_M_S_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_M_H, origin='lower', vmin=self.H_M_vmin, vmax=self.H_M_vmax, cmap='%s'%self.cmap_M_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_M_S-1],int(self.choice_M_S)),fontsize=23)
+				self.canvas_vectors.draw()
+
+
+	
+	
+	def plot_vector_E_S(self):
+		
+		self.set_eigens_E()
+		self.cmap_E_S=self.cmap_combobox_E_S.GetValue()
+		
+		inputstr=self.eigenorder_box_E_S.GetValue()
+		if inputstr=='':
+			inputsrt='0'
+			
+		self.choice_E_S=int(float(inputstr))
+	
+		if -1<self.choice_E_S<1:
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.axevalues.clear()
+			self.axevalues.plot(self.eigenvalues,linewidth=2)
+			self.canvas_vectors.draw()
+			self.canvas_values.draw()
+			
+		else:
+			if self.choice_E_S<0:
+				self.choice_E_S=self.choice_E_S+len(self.eigenvalues)+1
+				
+			self.crange_box_E_min.SetValue('%f'%min(self.eigenvectors[self.choice_E_S-1]))
+			self.crange_box_E_max.SetValue('%f'%max(self.eigenvectors[self.choice_E_S-1]))
+			self.eigenorder_box_E.SetValue('%i'%self.choice_E_S)
+		
+			self.Eigen_vectors.clear()
+			self.axevectors=self.Eigen_vectors.add_subplot(111)
+			self.Eigen_values.clear()
+			self.axevalues=self.Eigen_values.add_subplot(111)
+			#self.axevalues.clear()
+				
+			if self.check_status_E_S==0:
+				if self.scale_vectors_y_E=='linear':
+					self.H=self.axevectors.plot(self.eigenvectors[self.choice_E_S-1],'ro-',markersize=3)
+
+				elif self.scale_vectors_y_E=='log':
+					self.H=self.axevectors.plot(abs(self.eigenvectors[self.choice_E_S-1]),'go-',markersize=3)
+				
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E_S-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=23)
+
+				if self.scale_values_y_E=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E_S-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_E=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E_S-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+								
+				if self.Eigenvalues_status==1:
+					self.axevalues.set_title('Eigenvalue=%.4f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=17)
+				else:
+					self.axevalues.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=17)
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+				
+			else:
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_S-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)						
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=23)
+				if self.scale_values_y_E=='linear':
+					self.axevalues.plot(self.eigenvalues,'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))					
+					self.axevalues.set_ylim(min(self.eigenvalues),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E_S-1]*2),[min(self.eigenvalues),max(self.eigenvalues)])
+				elif self.scale_values_y_E=='log':
+					self.axevalues.plot(abs(self.eigenvalues),'go-',markersize=3)
+					self.axevalues.set_xscale('%s'%self.scale_values_x_E)
+					self.axevalues.set_yscale('%s'%self.scale_values_y_E)
+					self.axevalues.set_xlim(0,len(self.eigenvalues))
+					self.axevalues.set_ylim(min(abs(self.eigenvalues)),max(self.eigenvalues))
+					self.axevalues.plot(np.array([self.choice_E_S-1]*2),[min(abs(self.eigenvalues)),max(self.eigenvalues)])
+				
+				if self.Eigenvalues_status==1:
+					self.axevalues.set_title('Eigenvalue=%.4f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=17)
+				else:
+					self.axevalues.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=17)
+				self.canvas_vectors.draw()
+				self.canvas_values.draw()
+		
+	def on_HEALPix_checkbox_E_S(self,event):
+		
+		self.set_eigens_E()
+		
+		inputstr=self.eigenorder_box_E_S.GetValue()
+		if inputstr=='':
+			inputsrt='0'			
+		self.choice_E_S=int(float(inputstr))
+			
+		if self.HEALPix_checkbox_E_S.IsChecked():
+			self.check_status_E_S=1
+			self.cmap_E_S=self.cmap_combobox_E_S.GetValue()
+
+			if self.choice_E_S!=0:
+				self.choice_E_S_H=self.choice_E_S
+				
+				if self.choice_E_S_H<=0:
+					self.choice_E_S_H=self.choice_E_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_S_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=23)
+				self.canvas_vectors.draw()
+			
+		else:
+			self.check_status_E_S=0
+			if self.choice_E_S!=0:
+				self.choice_E_S_H=self.choice_E_S
+			
+				if self.choice_E_S_H<=0:
+					self.choice_E_S_H=self.choice_E_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.H=self.axevectors.plot(self.eigenvectors[self.choice_E_S_H-1],'ro-',markersize=3)
+				self.axevectors.set_xlim(0,len(self.eigenvectors[self.choice_E_S-1]))
+				self.axevectors.set_xscale('%s'%self.scale_vectors_x_E)
+				self.axevectors.set_yscale('%s'%self.scale_vectors_y_E)
+				if self.Eigenvalues_status==1:
+					self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				else:
+					self.axevectors.set_title('Eigenvalue=Unknown     Order=%i'%int(self.choice_E_S),fontsize=23)
+				self.canvas_vectors.draw()		
+		
+		
+	def on_text_enter_E_S(self,event):
+		self.plot_vector_E_S()
+		
+	def on_plot_button_E_S(self,event):
+		self.plot_vector_E_S()	
+	
+	def on_cmap_combobox_E_S(self,event):
+		self.set_eigens_E()
+		self.cmap_E_S=self.cmap_combobox_E_S.GetValue()
+		if self.HEALPix_checkbox_E_S.IsChecked():
+			if self.choice_E_S!=0:
+				self.choice_E_S_H=self.choice_E_S
+				
+				if self.choice_E_S_H<=0:
+					self.choice_E_S_H=self.choice_E_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_S_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				self.canvas_vectors.draw()
+	
+	def on_cmap_combobox_text_E_S(self,event):
+		self.set_eigens_E()
+		self.cmap_E_S=event.GetString()
+		if self.HEALPix_checkbox_E_S.IsChecked():
+			if self.choice_E_S!=0:
+				self.choice_E_S_H=self.choice_E_S
+				
+				if self.choice_E_S_H<=0:
+					self.choice_E_S_H=self.choice_E_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_S_H-1],return_projected_map=True)
+				
+				self.H_E=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', cmap='%s'%self.cmap_E_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_E,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				self.canvas_vectors.draw()
+		
+	def on_crange_box_E(self,event):
+		inputstr_min=self.crange_box_E_min.GetValue()
+		if inputstr_min!='':	
+			self.H_E_vmin=float(inputstr_min)
+			
+		inputstr_max=self.crange_box_E_max.GetValue()
+		if inputstr_max!='':	
+			self.H_E_vmax=float(inputstr_max)
+			
+		if self.HEALPix_checkbox_E_S.IsChecked():
+			if self.choice_E_S!=0:
+				self.choice_E_S_H=self.choice_E_S
+				
+				if self.choice_E_S_H<=0:
+					self.choice_E_S_H=self.choice_E_S_H+len(self.eigenvalues)+1
+					
+				self.Eigen_vectors.clear()
+				self.axevectors=self.Eigen_vectors.add_subplot(111)
+				
+				self.eigenvectors_choice_E_H=hp.mollview(self.eigenvectors[self.choice_E_S_H-1],return_projected_map=True)
+				
+				self.H_M=self.axevectors.imshow(self.eigenvectors_choice_E_H, origin='lower', vmin=self.H_E_vmin, vmax=self.H_E_vmax, cmap='%s'%self.cmap_E_S)
+				self.C=self.Eigen_vectors.colorbar(self.H_M,ax=self.axevectors,use_gridspec=True, orientation='horizontal',fraction=0.05,pad=0.08)
+				self.axevectors.set_title('Eigenvalue=%f     Order=%i'%(self.eigenvalues[self.choice_E_S-1],int(self.choice_E_S)),fontsize=23)
+				self.canvas_vectors.draw()
+
+
+
+
+
+
+		
+	def on_SaveEigens_button(self,event):
+		if self.Matrix_status==1:			
+			Dirname=os.path.dirname(os.path.abspath(__file__))
+			self.eigenvalues=self.eigenvalues.astype(dtype='%s'%self.dtype_Save_eigenvalues)
+			self.eigenvectors_save_M=self.eigenvectors_save_M.astype(dtype='%s'%self.dtype_Save_eigenvectors)
+			self.eigenvectors_save_UM=self.eigenvectors.astype(dtype='%s'%self.dtype_Save_eigenvectors)
+			np.ndarray.tofile(self.eigenvalues,'%s/Eigenvalues_%s'%(Dirname,self.filename_M))
+			np.ndarray.tofile(self.eigenvectors_save_M,'%s/Eigenvectors_%s_masked'%(Dirname,self.filename_M))
+			np.ndarray.tofile(self.eigenvectors_save_UM,'%s/Eigenvectors_%s_unmasked'%(Dirname,self.filename_M))
+			
+		else:
+			dialog = wx.MessageDialog(self, 'The Matrix You Input is not HEALPixable"\n' "Which means we don't get any valid Eigenvalues or Eigenvectors!", 'Hi, Watch Out!', wx.OK)
+			dialog.ShowModal()
+			dialog.Destroy()
+
+
+	
+	def add_toolbar(self):
+		self.toolbar_values = NavigationToolbar2Wx(self.canvas_values)
+		self.toolbar_vectors = NavigationToolbar2Wx(self.canvas_vectors)
+		self.toolbar_values.Realize()
+		self.toolbar_vectors.Realize()
+        
+		if wx.Platform == '__WXMAC__':
+			self.SetToolBar(self.toolbar_values)
+			self.SetToolBar(self.toolbar_vectors)
+		else:
+			tw_val, th_val = self.toolbar_values.GetSizeTuple()
+			tw_vec, th_vec = self.toolbar_vectors.GetSizeTuple()
+			fw_val, fh_val = self.canvas_values.GetSizeTuple()
+			fw_vec, fh_vec = self.canvas_vectors.GetSizeTuple()
+			self.toolbar_values.SetSize(wx.Size(fw_val*0.5, th_val*0.6))
+			self.toolbar_vectors.SetSize(wx.Size(fw_vec*0.5, th_vec*0.6))
+			self.SizerV1.Add(self.toolbar_values, 0, flag = wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL,border=0)
+			self.SizerV2.Add(self.toolbar_vectors, 0, flag = wx.EXPAND|wx.ALIGN_CENTER_HORIZONTAL,border=0)
+		self.toolbar_values.update()
+		self.toolbar_vectors.update()		
+		
+
+
+
+
+
+	
+				
+class Eigen_App(wx.App):
+	
+	def OnInit(self):
+		frame=PlotFrame()
+		frame.Show(True)
+		
+		return True
+
+
+		
+app=Eigen_App(0)
+app.MainLoop()	
